@@ -1,15 +1,24 @@
 import re
+from collections import Counter
 
 LOG_PATTERN = re.compile(
     r'(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
     r'"(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" '
     r'(?P<status>\d{3}) (?P<size>\S+)'
-    r'(?: "(?P<referer>[^"]*)" "(?P<agent>[^"]*)")?'
+    r'(?:\s+"(?P<referer>[^"]*)" "(?P<agent>[^"]*)")?'
 )
+
 
 def parse_log_file(file_path):
     total_lines = 0
     corrupted_lines = 0
+
+    total_requests = 0
+    error_requests = 0
+
+    ip_counter = Counter()
+    endpoint_counter = Counter()
+    hourly_counter = Counter()
 
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
@@ -33,7 +42,31 @@ def parse_log_file(file_path):
             print(f"Status: {data['status']}")
             print(f"Size: {data['size']}")
 
+            if data['status'].startswith(('4', '5')):
+                error_requests += 1
+
+            total_requests += 1
+            ip_counter[data['ip']] += 1
+            endpoint_counter[data['path']] += 1
+
+            time_parts = data['time'].split(':')
+            hour_key = f"{time_parts[0]}:{time_parts[1]}"
+            hourly_counter[hour_key] += 1
+
+    top_10_ips = ip_counter.most_common(10)
+
+    top_10_endpoints = endpoint_counter.most_common(10)
+
+    unique_ips_count = len(ip_counter)
+
+    error_rate = (error_requests / total_requests) * 100 if total_requests > 0 else 0
+
     print(f"Total lines processed: {total_lines}")
     print(f"Corrupted lines skipped: {corrupted_lines}")
+    print(f"Total requests: {total_requests}")
+    print(f"Top 10 ips: {top_10_ips}")
+    print(f"Top 10 endpoints: {top_10_endpoints}")
+    print(f"Unique ips count: {unique_ips_count}")
+    print(f"Error rate: {error_rate}")
 
 parse_log_file("test_access.log")
