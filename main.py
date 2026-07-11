@@ -5,7 +5,7 @@ import argparse
 import os
 import sys
 import gzip
-
+import json
 
 LOG_PATTERN = re.compile(
     r'(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
@@ -15,7 +15,7 @@ LOG_PATTERN = re.compile(
 )
 
 
-def parse_log_file(file_path):
+def parse_log_file(file_path, to_json=False):
     total_lines = 0
     corrupted_lines = 0
 
@@ -49,14 +49,6 @@ def parse_log_file(file_path):
 
             data = match.groupdict()
 
-            print(f"IP: {data['ip']}")
-            print(f"Time: {data['time']}")
-            print(f"Method: {data['method']}")
-            print(f"Path: {data['path']}")
-            print(f"Protocol: {data['protocol']}")
-            print(f"Status: {data['status']}")
-            print(f"Size: {data['size']}")
-
             if data['status'].startswith(('4', '5')):
                 error_requests += 1
 
@@ -68,21 +60,44 @@ def parse_log_file(file_path):
             hour_key = f"{time_parts[0]}:{time_parts[1]}"
             hourly_counter[hour_key] += 1
 
+    if total_requests == 0:
+        if to_json:
+            print(json.dumps({
+                "error": "No valid requests found in the log file.",
+                "metrics": {"total_lines_processed": total_lines, "corrupted_lines_skipped": corrupted_lines}
+            }, indent=4))
+        else:
+            print(f"Total lines processed: {total_lines}")
+            print(f"Corrupted lines skipped: {corrupted_lines}")
+            print(" No valid requests found in the log file.")
+        return
+
     top_10_ips = ip_counter.most_common(10)
-
     top_10_endpoints = endpoint_counter.most_common(10)
-
     unique_ips_count = len(ip_counter)
+    error_rate = (error_requests / total_requests) * 100
 
-    error_rate = (error_requests / total_requests) * 100 if total_requests > 0 else 0
-
-    print(f"Total lines processed: {total_lines}")
-    print(f"Corrupted lines skipped: {corrupted_lines}")
-    print(f"Total requests: {total_requests}")
-    print(f"Top 10 ips: {top_10_ips}")
-    print(f"Top 10 endpoints: {top_10_endpoints}")
-    print(f"Unique ips count: {unique_ips_count}")
-    print(f"Error rate: {error_rate}")
+    if to_json:
+        report_data = {
+            "metrics": {
+                "total_lines_processed": total_lines,
+                "corrupted_lines_skipped": corrupted_lines,
+                "total_requests": total_requests,
+                "unique_ips_count": unique_ips_count,
+                "error_rate_percentage": round(error_rate, 2)
+            },
+            "top_10_ips": [{"ip": ip, "count": count} for ip, count in top_10_ips],
+            "top_10_endpoints": [{"path": path, "count": count} for path, count in top_10_endpoints]
+        }
+        print(json.dumps(report_data, indent=4))
+    else:
+        print(f"Total lines processed: {total_lines}")
+        print(f"Corrupted lines skipped: {corrupted_lines}")
+        print(f"Total requests: {total_requests}")
+        print(f"Top 10 ips: {top_10_ips}")
+        print(f"Top 10 endpoints: {top_10_endpoints}")
+        print(f"Unique ips count: {unique_ips_count}")
+        print(f"Error rate: {error_rate:.2f}%")
 
     plot_hourly_traffic(hourly_counter)
 
@@ -119,10 +134,12 @@ if __name__ == "__main__":
     parser.add_argument("logfile", nargs="?", default="access.log",
                         help="Path to the access log file (default: access.log)")
 
+    parser.add_argument("--json", action="store_true", help="Output results in JSON format")
+
     args = parser.parse_args()
 
     if not os.path.exists(args.logfile):
         print(f"Error: The file '{args.logfile}' does not exist.", file=sys.stderr)
         sys.exit(1)
 
-    parse_log_file(args.logfile)
+    parse_log_file(args.logfile, to_json=args.json)
