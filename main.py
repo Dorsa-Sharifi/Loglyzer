@@ -1,5 +1,10 @@
 import re
 from collections import Counter
+import matplotlib.pyplot as plt
+import argparse
+import os
+import sys
+
 
 LOG_PATTERN = re.compile(
     r'(?P<ip>\S+) \S+ \S+ \[(?P<time>[^\]]+)\] '
@@ -69,4 +74,45 @@ def parse_log_file(file_path):
     print(f"Unique ips count: {unique_ips_count}")
     print(f"Error rate: {error_rate}")
 
-parse_log_file("test_access.log")
+    plot_hourly_traffic(hourly_counter)
+
+
+def plot_hourly_traffic(hourly_counter):
+    if not hourly_counter:
+        print("No traffic data to plot.")
+        return
+
+    hours = sorted(hourly_counter.keys())
+    counts = [hourly_counter[hour] for hour in hours]
+
+    plt.figure(figsize=(12, 6))
+
+    plt.bar(hours, counts, color='skyblue', edgecolor='navy')
+
+    plt.title("Hourly Traffic Distribution (Peak Analysis)", fontsize=14, fontweight='bold')
+    plt.xlabel("Time (Hour)", fontsize=12)
+    plt.ylabel("Number of Requests", fontsize=12)
+
+    plt.xticks(rotation=45, ha='right')
+
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
+
+    plt.savefig("traffic_report.png", dpi=300)
+    print("Graphical report saved as 'traffic_report.png'")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Advanced Server Access Log Analyzer CLI Tool")
+
+    parser.add_argument("logfile", nargs="?", default="access.log",
+                        help="Path to the access log file (default: access.log)")
+
+    args = parser.parse_args()
+
+    if not os.path.exists(args.logfile):
+        print(f"Error: The file '{args.logfile}' does not exist.", file=sys.stderr)
+        sys.exit(1)
+
+    parse_log_file(args.logfile)
