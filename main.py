@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import argparse
 import os
 import sys
+import gzip
 
 
 LOG_PATTERN = re.compile(
@@ -25,16 +26,25 @@ def parse_log_file(file_path):
     endpoint_counter = Counter()
     hourly_counter = Counter()
 
-    with open(file_path, 'r', encoding='utf-8') as file:
+    if file_path.endswith('.gz'):
+        open_func = gzip.open
+        open_mode = 'rt'
+    else:
+        open_func = open
+        open_mode = 'r'
+
+    with open_func(file_path, open_mode, encoding='utf-8') as file:
         for line in file:
             total_lines += 1
             line = line.strip()
+
+            if not line:
+                continue
 
             match = LOG_PATTERN.match(line)
 
             if not match:
                 corrupted_lines += 1
-                print(match)
                 continue
 
             data = match.groupdict()
